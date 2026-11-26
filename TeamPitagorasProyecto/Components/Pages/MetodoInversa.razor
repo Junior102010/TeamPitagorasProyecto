@@ -1,0 +1,560 @@
+﻿@page "/Metodo-inversa"
+@rendermode InteractiveServer
+@using TeamPitagorasProyecto.Services
+@inject MetodoInversaServices MetodoInversaService
+@inject NavigationManager Nav
+
+<PageTitle>LineMath - Método de la Inversa</PageTitle>
+
+<div class="linemath-page">
+    <header class="linemath-topbar">
+        <a href="/" class="brand-link">
+            <span class="brand-mark">x</span>
+            <span class="brand-name">LineMath</span>
+        </a>
+    </header>
+
+    <main class="linemath-container">
+        <div class="title-row">
+            <div class="title-left">
+                <button type="button" class="back-btn" @onclick="GoBack" aria-label="Volver">
+                    <span>‹</span>
+                </button>
+                <h1 class="page-title">Metodo de la Inversa</h1>
+                <button type="button" class="help-btn" @onclick="ToggleHelp" title="Información del método">?</button>
+            </div>
+
+            <button type="button" class="solve-btn" @onclick="SolveSystem">
+                Resolver ecuación
+            </button>
+        </div>
+
+        @if (showHelp)
+        {
+            <div class="info-banner">
+                El método de la inversa resuelve sistemas lineales AX = b calculando A⁻¹ mediante Gauss-Jordan y multiplicando X = A⁻¹b, siempre que det(A) ≠ 0.
+            </div>
+        }
+
+        <section class="step-block">
+            <div class="step-label">1. Selecciona el número de variables:</div>
+            <div class="size-selector">
+                @foreach (var size in AvailableSizes)
+                {
+                    <button type="button"
+                            class="size-btn @(variableCount == size ? "active" : "")"
+                            @onclick="() => ChangeSize(size)">
+                        @size
+                    </button>
+                }
+            </div>
+        </section>
+
+        <section class="step-block">
+            <div class="step-label">2. Ingresa la matriz del coeficiente [A] y el vector de resultado [b]:</div>
+
+            <div class="headers-grid">
+                <div class="matrix-header-title">Matriz de Coeficiente [A]</div>
+                <div class="vector-header-title">Vector b (terminos independientes)</div>
+            </div>
+
+            <div class="system-workspace">
+                <div class="matrix-box">
+                    <div class="var-columns" style="grid-template-columns: repeat(@variableCount, 76px);">
+                        @for (int j = 0; j < variableCount; j++)
+                        {
+                            <div class="var-label">@GetVariableName(j)</div>
+                        }
+                    </div>
+
+                    <div class="matrix-grid" style="grid-template-columns: repeat(@variableCount, 76px);">
+                        @for (int i = 0; i < variableCount; i++)
+                        {
+                            int row = i;
+                            for (int j = 0; j < variableCount; j++)
+                            {
+                                int col = j;
+                                <input type="number"
+                                       step="any"
+                                       class="cell-input"
+                                       value="@FormatInput(matrixA[row, col])"
+                                       @onchange="@(e => OnMatrixInput(row, col, e.Value?.ToString()))" />
+                            }
+                        }
+                    </div>
+                </div>
+
+                <div class="equals-sign">=</div>
+
+                <div class="vector-box">
+                    @for (int i = 0; i < variableCount; i++)
+                    {
+                        int row = i;
+                        <input type="number"
+                               step="any"
+                               class="cell-input vector-input"
+                               value="@FormatInput(vectorB[row])"
+                               @onchange="@(e => OnVectorInput(row, e.Value?.ToString()))" />
+                    }
+                </div>
+            </div>
+        </section>
+
+        <section class="result-section">
+            <div class="result-title">Resultado</div>
+
+            <div class="result-bar">
+                <div class="result-pills">
+                    @for (int i = 0; i < variableCount; i++)
+                    {
+                        string varName = GetVariableName(i);
+                        string valText = GetSolutionDisplay(i);
+                        <span class="result-pill">@varName = @valText</span>
+                        @if (i < variableCount - 1)
+                        {
+                            <span class="pill-divider">|</span>
+                        }
+                    }
+                </div>
+
+                <button type="button" class="procedure-toggle" @onclick="ToggleProcedure">
+                    <span>Ver procedimiento</span>
+                    <span class="chevron @(showProcedure ? "open" : "")">⌄</span>
+                </button>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="error-box">@errorMessage</div>
+            }
+
+            @if (showProcedure && lastResult is not null && lastResult.Steps.Count > 0)
+            {
+                <div class="procedure-panel">
+                    @foreach (var step in lastResult.Steps)
+                    {
+                        <pre class="step-line">@step</pre>
+                    }
+                </div>
+            }
+        </section>
+    </main>
+</div>
+
+<style>
+    .linemath-page {
+        min-height: 100vh;
+        background-color: #c5e2d8;
+        color: #162b25;
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+
+    .linemath-topbar {
+        background-color: #091d16;
+        padding: 12px 28px;
+        display: flex;
+        align-items: center;
+    }
+
+    .brand-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        color: #1da876;
+    }
+
+    .brand-mark {
+        font-size: 1.7rem;
+        font-weight: 800;
+        line-height: 1;
+    }
+
+    .brand-name {
+        font-family: 'Brush Script MT', 'Segoe Script', cursive;
+        font-size: 1.75rem;
+        color: #21b882;
+    }
+
+    .linemath-container {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 28px 24px 48px;
+    }
+
+    .title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .title-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .back-btn {
+        background: transparent;
+        border: none;
+        color: #114b3a;
+        font-size: 2.1rem;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0 6px;
+    }
+
+    .page-title {
+        margin: 0;
+        font-size: 2rem;
+        font-weight: 700;
+        color: #132a23;
+    }
+
+    .help-btn {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: 1.5px solid #2d5a4c;
+        background: transparent;
+        color: #2d5a4c;
+        font-size: 0.85rem;
+        font-weight: 700;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .solve-btn {
+        background-color: #0b5c46;
+        color: #ffffff;
+        border: none;
+        border-radius: 8px;
+        padding: 12px 24px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+    }
+
+    .solve-btn:hover {
+        background-color: #084736;
+    }
+
+    .info-banner {
+        background-color: #e6f4ee;
+        border-left: 4px solid #0b5c46;
+        padding: 10px 14px;
+        border-radius: 6px;
+        margin-bottom: 18px;
+        font-size: 0.92rem;
+    }
+
+    .step-block {
+        margin-bottom: 20px;
+    }
+
+    .step-label {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #132a23;
+        margin-bottom: 12px;
+    }
+
+    .size-selector {
+        display: flex;
+        gap: 10px;
+    }
+
+    .size-btn {
+        width: 34px;
+        height: 34px;
+        border: none;
+        border-radius: 5px;
+        background-color: #9ec5b8;
+        color: #15362c;
+        font-weight: 700;
+        font-size: 0.95rem;
+        cursor: pointer;
+    }
+
+    .size-btn.active {
+        background-color: #0b5c46;
+        color: #ffffff;
+    }
+
+    .headers-grid {
+        display: flex;
+        justify-content: space-between;
+        max-width: 640px;
+        margin: 14px auto 10px;
+        font-weight: 700;
+        font-size: 0.98rem;
+        color: #132a23;
+    }
+
+    .system-workspace {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 28px;
+        flex-wrap: wrap;
+    }
+
+    .matrix-box {
+        border: 2px solid #0b5c46;
+        border-radius: 6px;
+        padding: 14px 20px 20px;
+        background-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .var-columns {
+        display: grid;
+        gap: 14px;
+        margin-bottom: 10px;
+        text-align: center;
+    }
+
+    .var-label {
+        font-weight: 700;
+        font-size: 0.95rem;
+        color: #132a23;
+    }
+
+    .matrix-grid {
+        display: grid;
+        gap: 12px 14px;
+    }
+
+    .equals-sign {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #132a23;
+    }
+
+    .vector-box {
+        border: 2px solid #0b5c46;
+        border-radius: 6px;
+        padding: 18px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        background-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .cell-input {
+        width: 76px;
+        height: 36px;
+        background-color: #dfece7;
+        border: 1px solid #8aa99e;
+        border-radius: 7px;
+        text-align: center;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #132a23;
+        outline: none;
+    }
+
+    .cell-input:focus {
+        border-color: #0b5c46;
+        background-color: #ffffff;
+    }
+
+    .result-section {
+        margin-top: 24px;
+    }
+
+    .result-title {
+        font-weight: 700;
+        font-size: 1rem;
+        color: #0b5c46;
+        margin-bottom: 10px;
+    }
+
+    .result-bar {
+        background-color: #f4f8f6;
+        border-radius: 12px;
+        padding: 12px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        box-shadow: 0 2px 6px rgba(10, 40, 30, 0.08);
+    }
+
+    .result-pills {
+        display: flex;
+        align-items: center;
+        background-color: #0a6c52;
+        color: #ffffff;
+        border-radius: 8px;
+        padding: 8px 14px;
+        gap: 12px;
+        flex-wrap: wrap;
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+
+    .pill-divider {
+        opacity: 0.55;
+    }
+
+    .procedure-toggle {
+        background: transparent;
+        border: none;
+        color: #0b5c46;
+        font-weight: 700;
+        font-size: 0.95rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+    }
+
+    .chevron {
+        font-size: 1.2rem;
+        transition: transform 0.2s ease;
+    }
+
+    .chevron.open {
+        transform: rotate(180deg);
+    }
+
+    .error-box {
+        margin-top: 12px;
+        background-color: #fde8e8;
+        color: #9b1c1c;
+        border: 1px solid #f8b4b4;
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 0.92rem;
+        font-weight: 600;
+    }
+
+    .procedure-panel {
+        margin-top: 12px;
+        background-color: #f4f8f6;
+        border-radius: 10px;
+        padding: 16px 20px;
+        border: 1px solid #b5d5ca;
+    }
+
+    .step-line {
+        margin: 0 0 10px;
+        white-space: pre-wrap;
+        font-family: Consolas, 'Courier New', monospace;
+        font-size: 0.88rem;
+        color: #132a23;
+    }
+
+    .step-line:last-child {
+        margin-bottom: 0;
+    }
+</style>
+
+@code {
+    private static readonly int[] AvailableSizes = [2, 3, 4, 5];
+    private static readonly string[] VariableLabels = ["X", "Y", "Z", "W", "V"];
+
+    private int variableCount = 3;
+    private double[,] matrixA = new double[3, 3];
+    private double[] vectorB = new double[3];
+    private InverseMethodResult? lastResult;
+    private string? errorMessage;
+    private bool showProcedure;
+    private bool showHelp;
+
+    protected override void OnInitialized()
+    {
+        InitializeSystem(3);
+    }
+
+    private void ChangeSize(int newSize)
+    {
+        variableCount = newSize;
+        InitializeSystem(newSize);
+    }
+
+    private void InitializeSystem(int n)
+    {
+        matrixA = new double[n, n];
+        vectorB = new double[n];
+        lastResult = null;
+        errorMessage = null;
+        showProcedure = false;
+    }
+
+    private string GetVariableName(int index)
+    {
+        return index < VariableLabels.Length ? VariableLabels[index] : $"X{index + 1}";
+    }
+
+    private string FormatInput(double value)
+    {
+        return value == 0 ? string.Empty : value.ToString("G");
+    }
+
+    private void OnMatrixInput(int row, int col, string? raw)
+    {
+        matrixA[row, col] = ParseDouble(raw);
+    }
+
+    private void OnVectorInput(int row, string? raw)
+    {
+        vectorB[row] = ParseDouble(raw);
+    }
+
+    private double ParseDouble(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return 0;
+
+        if (double.TryParse(raw, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.CurrentCulture, out var val))
+            return val;
+
+        if (double.TryParse(raw.Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out val))
+            return val;
+
+        return 0;
+    }
+
+    private void SolveSystem()
+    {
+        errorMessage = null;
+        var result = MetodoInversaService.Solve(matrixA, vectorB);
+        lastResult = result;
+
+        if (!result.Success)
+        {
+            errorMessage = result.ErrorMessage;
+        }
+    }
+
+    private string GetSolutionDisplay(int index)
+    {
+        if (lastResult is null || !lastResult.Success || index >= lastResult.Solution.Length)
+            return "?";
+
+        return lastResult.Solution[index].ToString("G6");
+    }
+
+    private void ToggleProcedure()
+    {
+        showProcedure = !showProcedure;
+    }
+
+    private void ToggleHelp()
+    {
+        showHelp = !showHelp;
+    }
+
+    private void GoBack()
+    {
+        Nav.NavigateTo("/");
+    }
+}
+```[cite: 3]

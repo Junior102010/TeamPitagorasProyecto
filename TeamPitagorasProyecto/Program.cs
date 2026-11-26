@@ -1,9 +1,10 @@
 using TeamPitagorasProyecto.Components;
-
+using TeamPitagorasProyecto.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+builder.Services.AddScoped<MetodoInversaServices>();
 
 var app = builder.Build();
 
